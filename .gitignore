@@ -1,3 +1,6 @@
 .vs
 Autodocking 2/obj/
 Autodocking 2/bin/
+
+# MDK local file
+*.local.ini

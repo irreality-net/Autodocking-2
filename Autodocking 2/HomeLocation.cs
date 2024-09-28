@@ -1,6 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Xml.Serialization;
-using Sandbox.ModAPI.Ingame;
+﻿using Sandbox.ModAPI.Ingame;
+using System.Collections.Generic;
 using VRageMath;
 
 namespace IngameScript
@@ -21,7 +20,7 @@ namespace IngameScript
 
 
             public IMyShipConnector shipConnector;
-            public long shipConnectorID; // myConnector.EntityId;
+            public string shipConnectorName; // myConnector.EntityId;
             public Vector3D stationAcceleration = Vector3D.Zero;
             public Vector3D stationAngularVelocity = Vector3D.Zero;
             public Vector3D stationConnectorForward;
@@ -160,7 +159,7 @@ namespace IngameScript
                 var data_parts = saved_data_string.Split(main_delimeter);
                 if (data_parts.Length == 8)
                 {
-                    long.TryParse(data_parts[0], out shipConnectorID);
+                    shipConnectorName = data_parts[0];
                     long.TryParse(data_parts[1], out stationConnectorID);
                     Vector3D.TryParse(data_parts[2], out stationConnectorPosition);
                     Vector3D.TryParse(data_parts[3], out stationConnectorForward);
@@ -169,11 +168,11 @@ namespace IngameScript
                     double.TryParse(data_parts[6], out stationConnectorSize);
                     var argument_parts = data_parts[7].Split(arg_delimeter);
                     foreach (var arg in argument_parts) arguments.Add(arg);
-                    UpdateShipConnectorUsingID(parent_program);
+                    UpdateShipConnectorUsingName(parent_program);
                 }
                 else if (data_parts.Length == 12)
                 {
-                    long.TryParse(data_parts[0], out shipConnectorID);
+                    shipConnectorName = data_parts[0];
                     long.TryParse(data_parts[1], out stationConnectorID);
                     Vector3D.TryParse(data_parts[2], out stationConnectorPosition);
                     Vector3D.TryParse(data_parts[3], out stationConnectorForward);
@@ -186,7 +185,7 @@ namespace IngameScript
                     ExtractSavedNames(data_parts[10]);
                     var argument_parts = data_parts[11].Split(arg_delimeter);
                     foreach (var arg in argument_parts) arguments.Add(arg);
-                    UpdateShipConnectorUsingID(parent_program);
+                    UpdateShipConnectorUsingName(parent_program);
                 }
                 else
                 {
@@ -201,7 +200,7 @@ namespace IngameScript
             public string ProduceSaveData()
             {
                 var o_string = "";
-                o_string += shipConnectorID.ToString() + main_delimeter;
+                o_string += shipConnectorName + main_delimeter;
                 o_string += stationConnectorID.ToString() + main_delimeter;
                 o_string += stationConnectorPosition.ToString() + main_delimeter;
                 o_string += stationConnectorForward.ToString() + main_delimeter;
@@ -265,7 +264,7 @@ namespace IngameScript
             /// <param name="station_connector"></param>
             public void UpdateData(IMyShipConnector my_connector, IMyShipConnector station_connector)
             {
-                shipConnectorID = my_connector.EntityId;
+                shipConnectorName = my_connector.CustomName;
                 shipConnector = my_connector;
                 stationConnectorID = station_connector.EntityId;
                 stationConnectorPosition = station_connector.GetPosition();
@@ -327,9 +326,9 @@ namespace IngameScript
 
             //}
 
-            public void UpdateShipConnectorUsingID(Program parent_program)
+            public void UpdateShipConnectorUsingName(Program parent_program)
             {
-                shipConnector = (IMyShipConnector) parent_program.GridTerminalSystem.GetBlockWithId(shipConnectorID);
+                shipConnector = (IMyShipConnector) parent_program.GridTerminalSystem.GetBlockWithName(shipConnectorName);
             }
 
             public string UpdateDataFromOptionalHomeScript(string[] data_parts)
@@ -373,7 +372,7 @@ namespace IngameScript
                 if (obj == null || GetType() != obj.GetType()) return false;
 
                 var test = (HomeLocation) obj;
-                if (shipConnectorID == test.shipConnectorID && stationConnectorID == test.stationConnectorID)
+                if (shipConnectorName == test.shipConnectorName && stationConnectorID == test.stationConnectorID)
                     return true;
                 return false;
             }
@@ -386,7 +385,7 @@ namespace IngameScript
             {
                 var hashCode = -48872655;
                 hashCode = hashCode * -1521134295 + EqualityComparer<HashSet<string>>.Default.GetHashCode(arguments);
-                hashCode = hashCode * -1521134295 + shipConnectorID.GetHashCode();
+                hashCode = hashCode * -1521134295 + shipConnectorName.GetHashCode();
                 hashCode = hashCode * -1521134295 + stationConnectorID.GetHashCode();
                 // hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode (station_connector_name);
                 // hashCode = hashCode * -1521134295 + EqualityComparer<Vector3D>.Default.GetHashCode (station_connector_position);

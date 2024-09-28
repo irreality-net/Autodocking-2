@@ -121,7 +121,6 @@ namespace IngameScript
 
         public Program()
         {
-
             errorState = false;
             Runtime.UpdateFrequency = UpdateFrequency.Once;
             platformVelocity = Vector3D.Zero;
@@ -131,8 +130,7 @@ namespace IngameScript
 
             shipIOHandler = new IOHandler(this);
 
-            if (Storage.Length > 0)
-                RetrieveStorage();
+            ReadHomeLocations();
 
             antennaHandler = new AntennaHandler(this);
             systemsAnalyzer = new ShipSystemsAnalyzer(this);
@@ -148,11 +146,15 @@ namespace IngameScript
             SafelyExit();
         }
 
-        private void RetrieveStorage()
+        private void ReadHomeLocations()
         {
-            //Data 
+            string data = Storage;
+            if (data.Length == 0)
+            {
+                return;
+            }
 
-            var two_halves = Storage.Split('#');
+            var two_halves = data.Split('#');
             //if (copy_paste_persistant_memory)
             //    two_halves = Me.CustomData.Split('#');
 
@@ -311,33 +313,28 @@ namespace IngameScript
 
         }
 
-        public void Save()
+        public void WriteHomeLocations()
         {
-            produceDataString();
+            Storage = produceDataString();
         }
 
-        public void produceDataString()
+        public string produceDataString()
         {
-            Storage = "";
+            string result = "";
             //if (copy_paste_persistant_memory)
             //    Me.CustomData = "";
             //Data 
             foreach (var homeLocation in homeLocations)
             {
-                AppendToStorage(homeLocation.ProduceSaveData() + ";");
+                result += homeLocation.ProduceSaveData() + ";";
                 //Storage += homeLocation.ProduceSaveData() + ";";
                 //if (copy_paste_persistant_memory)
                 //    Me.CustomData += homeLocation.ProduceSaveData() + ";";
             }
             //Storage += "#";
-            AppendToStorage("#");
-        }
+            result += "#";
 
-        public void AppendToStorage(string data)
-        {
-            Storage += data;
-            //if (copy_paste_persistant_memory)
-            //    Me.CustomData += data;
+            return result;
         }
 
         /// <summary>Begins the ship docking sequence. Requires (Will require) a HomeLocation and argument.</summary>
@@ -352,10 +349,8 @@ namespace IngameScript
                 if (connectorOverride != null)
                 {
                     systemsAnalyzer.currentHomeLocation.shipConnector = connectorOverride;
-                    systemsAnalyzer.currentHomeLocation.shipConnectorID = connectorOverride.EntityId;
+                    systemsAnalyzer.currentHomeLocation.shipConnectorName = connectorOverride.CustomName;
                 }
-
-                Me.CustomData = systemsAnalyzer.currentHomeLocation.shipConnector.EntityId.ToString();
 
                 shipIOHandler.OutputStartTimer();
 
@@ -454,6 +449,8 @@ namespace IngameScript
                     shipIOHandler.Echo("- Found " + amountFound +
                                        " other associations with that argument. Removed these others.");
             }
+
+            WriteHomeLocations();
 
             if (argument == "")
             {
@@ -693,6 +690,8 @@ namespace IngameScript
                 homeLocations.Remove(toDelete[0]);
                 toDelete.RemoveAt(0);
             }
+
+            WriteHomeLocations();
 
             if (found_arg)
             {

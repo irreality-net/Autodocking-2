@@ -11,6 +11,8 @@ namespace IngameScript
     {
         public class IOHandler
         {
+            private const string Version = "2.0 ASX2";
+
             private readonly Program parent_program;
             private string echoLine = "";
             public List<IMyTextSurface> output_LCDs = new List<IMyTextSurface>();
@@ -164,7 +166,7 @@ namespace IngameScript
                 if (echoLine != "")
                 {
                     if (parent_program.runningIssues.Length > 0) parent_program.runningIssues += "\n";
-                    var echoString = "= Spug's Auto Docking 2.0 =\n\n" + parent_program.runningIssues + echoLine;
+                    var echoString = $"= Spug's Auto Docking {Version} =\n\n{parent_program.runningIssues}{echoLine}";
                     parent_program.Echo(echoString);
                     //parent_program.Me.GetSurface(0).ContentType = ContentType.TEXT_AND_IMAGE;
                     //parent_program.Me.GetSurface(0).WriteText(echoString);

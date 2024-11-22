@@ -647,6 +647,10 @@ namespace IngameScript
 
         public string checkForClear(string argument)
         {
+            if (argument.ToLower() == "clear")
+            {
+                return string.Empty;
+            }
 
             string[] split = argument.Split(' ');
 
@@ -667,15 +671,16 @@ namespace IngameScript
             }
         }
 
-
-
         public void ClearMemoryLocation(string argument)
         {
-            //Check if any homelocations had that argument before, if so, remove it.
-            bool found_arg = false;
-            var toDelete = new List<HomeLocation>();
-            foreach (var currentHomeLocation in homeLocations)
-                if (currentHomeLocation.arguments.Contains(argument)) {
+            if (argument.Length > 0)
+            {
+                bool found_arg = false;
+                //Check if any homelocations had that argument before, if so, remove it.
+                var toDelete = new List<HomeLocation>();
+                foreach (var currentHomeLocation in homeLocations)
+                    if (currentHomeLocation.arguments.Contains(argument))
+                    {
                         currentHomeLocation.arguments.Remove(argument);
                         if (currentHomeLocation.landingSequences.ContainsKey(argument))
                         {
@@ -683,25 +688,30 @@ namespace IngameScript
                         }
                         found_arg = true;
                         if (currentHomeLocation.arguments.Count == 0) toDelete.Add(currentHomeLocation);
+                    }
+
+                while (toDelete.Count > 0)
+                {
+                    homeLocations.Remove(toDelete[0]);
+                    toDelete.RemoveAt(0);
                 }
 
-            while (toDelete.Count > 0)
-            {
-                homeLocations.Remove(toDelete[0]);
-                toDelete.RemoveAt(0);
-            }
-
-            WriteHomeLocations();
-
-            if (found_arg)
-            {
-                shipIOHandler.Echo("CLEARED\nThe argument: " + IOHandler.ConvertArg(argument) + "\nhas been cleared from memory.");
+                if (found_arg)
+                {
+                    shipIOHandler.Echo("CLEARED\nThe argument: " + IOHandler.ConvertArg(argument) + "\nhas been cleared from memory.");
+                }
+                else
+                {
+                    shipIOHandler.Echo("WARNING\nThe argument: " + IOHandler.ConvertArg(argument) + "\nwasn't found in memory.");
+                }
             }
             else
             {
-                shipIOHandler.Echo("WARNING\nThe argument: " + IOHandler.ConvertArg(argument) + "\nwasn't found in memory.");
+                shipIOHandler.Echo("CLEARED\nAll locations have been cleared from memory.");
+                homeLocations.Clear();
             }
-            
+
+            WriteHomeLocations();
         }
 
         public string ProduceDataOutputString()
@@ -781,8 +791,15 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            if ((updateSource & (UpdateType.Update1 | UpdateType.Once | UpdateType.IGC)) == 0)
+            switch (argument.Trim().ToLower())
+            {
+                case "list":
+                    shipIOHandler.OutputHomeLocations();
+                    shipIOHandler.EchoFinish();
+                    return;
+            }
 
+            if ((updateSource & (UpdateType.Update1 | UpdateType.Once | UpdateType.IGC)) == 0)
             {
                 // Script is activated by pressing "Run"
                 if (errorState)

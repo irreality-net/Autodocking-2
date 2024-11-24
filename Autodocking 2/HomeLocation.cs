@@ -13,11 +13,7 @@ namespace IngameScript
         /// </summary>
         public class HomeLocation
         {
-            private const char main_delimeter = '¬';
-            private const char arg_delimeter = '`';
-            
             public HashSet<string> arguments = new HashSet<string>();
-
 
             public IMyShipConnector shipConnector;
             public string shipConnectorName; // myConnector.EntityId;
@@ -27,8 +23,6 @@ namespace IngameScript
             public long stationConnectorID;
             public Vector3D stationConnectorLeft;
             public Vector3D stationConnectorPosition;
-
-
 
             public string stationConnectorName = null;
             public string stationGridName = null;
@@ -48,11 +42,10 @@ namespace IngameScript
 
             public Dictionary<string, List<Waypoint>> landingSequences = new Dictionary<string, List<Waypoint>>();
 
-
-            public void landingSequencesFromString(string data)
+            public static Dictionary<string, List<Waypoint>> LandingSequencesFromString(string data)
             {
-                landingSequences = new Dictionary<string, List<Waypoint>>();
-                if (data != "")
+                Dictionary<string, List<Waypoint>> result = new Dictionary<string, List<Waypoint>>();
+                if (!string.IsNullOrWhiteSpace(data))
                 {
                     string[] split_landing_sequences = data.Split(landing_sequence_delimeter);
 
@@ -92,15 +85,16 @@ namespace IngameScript
                                 }
                                 if (currentLandingSequence.Count > 0)
                                 {
-                                    landingSequences[current_arg] = currentLandingSequence;
+                                    result[current_arg] = currentLandingSequence;
                                 }
                             }
                         }
                     }
-
                 }
+                return result;
             }
-            public string landingSequencesToString()
+
+            public static string LandingSequencesToString(Dictionary<string, List<Waypoint>> landingSequences)
             {
                 string o_string = "";
 
@@ -123,22 +117,10 @@ namespace IngameScript
                 return o_string;
             }
 
-            public void ExtractSavedNames(string data_string)
+            public HomeLocation(string gridName)
             {
-                string[] data_split = data_string.Split(waypoint_delimeter);
-                stationGridName = data_split[0];
-                stationConnectorName = data_split[1];
+                stationGridName = gridName;
             }
-
-            public string ProduceSavedNames()
-            {
-                string o_string = "";
-                o_string += stationGridName + waypoint_delimeter;
-                o_string += stationConnectorName;
-                return o_string;
-            }
-
-
 
             /// <summary>
             ///     new_arg = the initial argument to be associated with this HomeLocation<br />
@@ -152,78 +134,6 @@ namespace IngameScript
             {
                 arguments.Add(new_arg);
                 UpdateData(my_connector, station_connector);
-            }
-
-            public HomeLocation(string saved_data_string, Program parent_program)
-            {
-                var data_parts = saved_data_string.Split(main_delimeter);
-                if (data_parts.Length == 8)
-                {
-                    shipConnectorName = data_parts[0];
-                    long.TryParse(data_parts[1], out stationConnectorID);
-                    Vector3D.TryParse(data_parts[2], out stationConnectorPosition);
-                    Vector3D.TryParse(data_parts[3], out stationConnectorForward);
-                    Vector3D.TryParse(data_parts[4], out stationConnectorUpGlobal);
-                    long.TryParse(data_parts[5], out stationGridID);
-                    double.TryParse(data_parts[6], out stationConnectorSize);
-                    var argument_parts = data_parts[7].Split(arg_delimeter);
-                    foreach (var arg in argument_parts) arguments.Add(arg);
-                    UpdateShipConnectorUsingName(parent_program);
-                }
-                else if (data_parts.Length == 12)
-                {
-                    shipConnectorName = data_parts[0];
-                    long.TryParse(data_parts[1], out stationConnectorID);
-                    Vector3D.TryParse(data_parts[2], out stationConnectorPosition);
-                    Vector3D.TryParse(data_parts[3], out stationConnectorForward);
-                    Vector3D.TryParse(data_parts[4], out stationConnectorUpGlobal);
-                    Vector3D.TryParse(data_parts[5], out stationConnectorUpLocal);
-                    Vector3D.TryParse(data_parts[6], out stationConnectorLeft);
-                    long.TryParse(data_parts[7], out stationGridID);
-                    double.TryParse(data_parts[8], out stationConnectorSize);
-                    landingSequencesFromString(data_parts[9]);
-                    ExtractSavedNames(data_parts[10]);
-                    var argument_parts = data_parts[11].Split(arg_delimeter);
-                    foreach (var arg in argument_parts) arguments.Add(arg);
-                    UpdateShipConnectorUsingName(parent_program);
-                }
-                else
-                {
-                    shipConnector = null;
-                }
-            }
-
-            /// <summary>
-            ///     Serializes the HomeLocation into a string ready to be saved.
-            /// </summary>
-            /// <returns></returns>
-            public string ProduceSaveData()
-            {
-                var o_string = "";
-                o_string += shipConnectorName + main_delimeter;
-                o_string += stationConnectorID.ToString() + main_delimeter;
-                o_string += stationConnectorPosition.ToString() + main_delimeter;
-                o_string += stationConnectorForward.ToString() + main_delimeter;
-                o_string += stationConnectorUpGlobal.ToString() + main_delimeter;
-                o_string += stationConnectorUpLocal.ToString() + main_delimeter;
-                o_string += stationConnectorLeft.ToString() + main_delimeter;
-
-                //if(stationGridID.Contains(";") || stationGridID.Contains(main_delimeter) || stationGridID.Contains("#"))
-                //{
-                //    stationGridID = "Name contained bad char";
-                //}
-                o_string += stationGridID.ToString() + main_delimeter;
-                o_string += stationConnectorSize.ToString() + main_delimeter;
-
-                o_string += landingSequencesToString() + main_delimeter;
-                //Matrix transformMat = Matrix.
-
-                o_string += ProduceSavedNames() + main_delimeter;
-
-                foreach (var arg in arguments) o_string += arg + arg_delimeter;
-                o_string = o_string.Substring(0, o_string.Length - 1);
-
-                return o_string;
             }
 
             public string ProduceUserFriendlyData()
@@ -251,7 +161,7 @@ namespace IngameScript
                 {
                     o_string = o_string.Substring(0, o_string.Length - 1);
                 }
-                
+
 
                 return o_string;
             }
@@ -328,7 +238,7 @@ namespace IngameScript
 
             public void UpdateShipConnectorUsingName(Program parent_program)
             {
-                shipConnector = (IMyShipConnector) parent_program.GridTerminalSystem.GetBlockWithName(shipConnectorName);
+                shipConnector = (IMyShipConnector)parent_program.GridTerminalSystem.GetBlockWithName(shipConnectorName);
             }
 
             public string UpdateDataFromOptionalHomeScript(string[] data_parts)
@@ -371,7 +281,7 @@ namespace IngameScript
             {
                 if (obj == null || GetType() != obj.GetType()) return false;
 
-                var test = (HomeLocation) obj;
+                var test = (HomeLocation)obj;
                 if (shipConnectorName == test.shipConnectorName && stationConnectorID == test.stationConnectorID)
                     return true;
                 return false;

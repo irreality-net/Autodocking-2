@@ -1,16 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using Sandbox.ModAPI.Ingame;
+﻿using Sandbox.ModAPI.Ingame;
 using Sandbox.ModAPI.Interfaces;
+using System;
+using System.Collections.Generic;
+using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
 
 namespace IngameScript
 {
     internal partial class Program : MyGridProgram
     {
-
         #region mdk preserve
-
         // CHANGEABLE VARIABLES:
 
         int speedSetting = 2;                           // 1 = Cinematic, 2 = Classic, 3 = Breakneck
@@ -48,19 +47,20 @@ namespace IngameScript
         double waypoints_top_speed = 100;                     // the top speed the ship will go in m/s when it's moving towards waypoints
         bool rotate_during_waypoints = true;                    // if true, the ship will rotate to face each waypoint's direction as it goes along.
 
-
-
         // This code has been minified by Malware's MDK minifier.
         // Find the original source code here:
         // https://github.com/ksqk34/Autodocking-2
-
-
-
 
         // DO NOT CHANGE BELOW THIS LINE
         // Well you can try...
         private readonly ShipSystemsAnalyzer systemsAnalyzer;
         #endregion
+
+        public const string About = Application + " " + Version + "\r\n(C) irreality.net 2024\r\n(C) Spug 2020";
+        public const string ScriptID = "Autodocking";
+        private const string Application = "Spug's Auto Docking\r\nby Abrasax Industries";
+        private const string Version = "1.2";
+
         private const double updatesPerSecond = 10; // Defines how many times the script performes it's calculations per second.
 
         // Script constants:
@@ -86,7 +86,7 @@ namespace IngameScript
         private double angleRoll;
         private double angleYaw;
 
-        public List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+        public readonly List<IMyTerminalBlock> blocks;
 
 
         // Script States:
@@ -119,23 +119,37 @@ namespace IngameScript
         // Thanks to:
         // https://github.com/malware-dev/MDK-SE/wiki/Quick-Introduction-to-Space-Engineers-Ingame-Scripts
 
+        private Display _display;
+        private ConfigurationBuilder _configuration;
+
         public Program()
         {
+            _display = new Display(Me.CustomName, Me.GetSurface(0), Me.BlockDefinition.SubtypeId);
+            _display.Clear();
+            _display.WriteLine(About);
+            if (string.IsNullOrWhiteSpace(Me.CustomData))
+            {
+                _display.GetRecommendedSettings().CopyTo(_display);
+            }
+
+            _configuration = new ConfigurationBuilder();
+            LoadConfiguration();
+
             errorState = false;
             Runtime.UpdateFrequency = UpdateFrequency.Once;
             platformVelocity = Vector3D.Zero;
+            blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocks(blocks);
-
+            
             homeLocations = new List<HomeLocation>();
 
-            shipIOHandler = new IOHandler(this);
+            shipIOHandler = new IOHandler(ScriptID, this);
 
-            ReadHomeLocations();
-
+            LoadHomeLocations();
+            
             antennaHandler = new AntennaHandler(this);
             systemsAnalyzer = new ShipSystemsAnalyzer(this);
             systemsController = new ShipSystemsController(this);
-
 
             pitchPID = new PID(proportionalConstant, 0, derivativeConstant, -10, 10, timeLimit);
             rollPID = new PID(proportionalConstant, 0, derivativeConstant, -10, 10, timeLimit);
@@ -143,29 +157,8 @@ namespace IngameScript
 
             timeElapsed = 0;
             timeElapsedSinceAntennaCheck = 0;
+
             SafelyExit();
-        }
-
-        private void ReadHomeLocations()
-        {
-            string data = Storage;
-            if (data.Length == 0)
-            {
-                return;
-            }
-
-            var two_halves = data.Split('#');
-            //if (copy_paste_persistant_memory)
-            //    two_halves = Me.CustomData.Split('#');
-
-            var home_location_data = two_halves[0].Split(';');
-
-            foreach (var dataItem in home_location_data)
-                if (dataItem.Length > 0)
-                {
-                    var newLoc = new HomeLocation(dataItem, this);
-                    if (newLoc.shipConnector != null) homeLocations.Add(newLoc);
-                }
         }
 
         //Help from Whip.
@@ -313,30 +306,6 @@ namespace IngameScript
 
         }
 
-        public void WriteHomeLocations()
-        {
-            Storage = produceDataString();
-        }
-
-        public string produceDataString()
-        {
-            string result = "";
-            //if (copy_paste_persistant_memory)
-            //    Me.CustomData = "";
-            //Data 
-            foreach (var homeLocation in homeLocations)
-            {
-                result += homeLocation.ProduceSaveData() + ";";
-                //Storage += homeLocation.ProduceSaveData() + ";";
-                //if (copy_paste_persistant_memory)
-                //    Me.CustomData += homeLocation.ProduceSaveData() + ";";
-            }
-            //Storage += "#";
-            result += "#";
-
-            return result;
-        }
-
         /// <summary>Begins the ship docking sequence. Requires (Will require) a HomeLocation and argument.</summary>
         /// <param name="beginConnector"></param>
         /// <param name="argument"></param>
@@ -450,7 +419,7 @@ namespace IngameScript
                                        " other associations with that argument. Removed these others.");
             }
 
-            WriteHomeLocations();
+            SaveHomeLocations();
 
             if (argument == "")
             {
@@ -711,7 +680,7 @@ namespace IngameScript
                 homeLocations.Clear();
             }
 
-            WriteHomeLocations();
+            SaveHomeLocations();
         }
 
         public string ProduceDataOutputString()
@@ -791,27 +760,19 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            switch (argument.Trim().ToLower())
-            {
-                case "list":
-                    shipIOHandler.OutputHomeLocations();
-                    shipIOHandler.EchoFinish();
-                    return;
-            }
-
             if ((updateSource & (UpdateType.Update1 | UpdateType.Once | UpdateType.IGC)) == 0)
             {
                 // Script is activated by pressing "Run"
+                if (ExecuteCommand(argument))
+                {
+                    return;
+                }
+
                 if (errorState)
                 {
-                    if (argument.ToLower().Trim() == "[data_output_request]")
-                    {
-                        Me.CustomData = ProduceDataOutputString();
-                    }
                     // If an error has happened
                     errorState = false;
                     systemsAnalyzer.GatherBasicData();
-
                 }
 
                 if (!errorState)
@@ -820,8 +781,6 @@ namespace IngameScript
 
                     if (!recording)
                     {
-
-
                         var my_connected_connector = systemsAnalyzer.FindMyConnectedConnector();
 
                         var clear_command = checkForClear(argument);
@@ -837,10 +796,6 @@ namespace IngameScript
                             }
                         }
 
-                        else if (argument.ToLower().Trim() == "[data_output_request]")
-                        {
-                            Me.CustomData = ProduceDataOutputString();
-                        }
                         else if (clear_command != null)
                         {
                             ClearMemoryLocation(clear_command);
@@ -853,11 +808,11 @@ namespace IngameScript
                             if (user_wants_readonly && my_connected_connector != null)
                             {
 
-                                    if (my_connected_connector.Status == MyShipConnectorStatus.Connectable)
-                                    {
-                                        my_connected_connector = null;
-                                    }
-                                
+                                if (my_connected_connector.Status == MyShipConnectorStatus.Connectable)
+                                {
+                                    my_connected_connector = null;
+                                }
+
                             }
 
                             if (my_connected_connector == null)
@@ -879,7 +834,7 @@ namespace IngameScript
                                     {
                                         Begin(argument);
                                     }
-                                    
+
                                 }
                             }
                             else
@@ -921,7 +876,7 @@ namespace IngameScript
                             }
                             recordWaypoint(my_connected_connector, argument);
                         }
-                        
+
                     }
                 }
 
@@ -964,10 +919,116 @@ namespace IngameScript
             //shipIOHandler.EchoFinish();
         }
 
-        //public void ScriptMain(string argum)
-        //{
+        private void LoadConfiguration()
+        {
+            MyIniParseResult customDataParseResult;
+            if (_configuration.TryLoad(Me.CustomData, out customDataParseResult))
+            {
+                SaveConfiguration();
+            }
+            else
+            {
+                _display.WriteLine("Error while loading configuration.");
+                _display.WriteLine(customDataParseResult.ToString());
+            }
+        }
 
-        //}
+        private void SaveConfiguration()
+        {
+            Me.CustomData = _configuration.ToString();
+        }
+
+        private void SaveHomeLocations()
+        {
+            ISet<string> toRemove = _configuration.GridNames;
+            foreach (HomeLocation homeLocation in homeLocations)
+            {
+                DockConfigurationBuilder dock = _configuration.Dock(homeLocation.stationGridName);
+                dock.GridID = homeLocation.stationGridID;
+                dock.ConnectorName = homeLocation.stationConnectorName;
+                dock.ConnectorID = homeLocation.stationConnectorID;
+                dock.ConnectorPosition = homeLocation.stationConnectorPosition;
+                dock.ConnectorForward = homeLocation.stationConnectorForward;
+                dock.ConnectorUpGlobal = homeLocation.stationConnectorUpGlobal;
+                dock.ConnectorUpLocal = homeLocation.stationConnectorUpLocal;
+                dock.ConnectorLeft = homeLocation.stationConnectorLeft;
+                dock.ConnectorSize = homeLocation.stationConnectorSize;
+                dock.MyConnectorName = homeLocation.shipConnectorName;
+                dock.LandingSequences = HomeLocation.LandingSequencesToString(homeLocation.landingSequences);
+                dock.Arguments = homeLocation.arguments;
+                toRemove.Remove(dock.GridName);
+            }
+
+            foreach (string gridName in toRemove)
+            {
+                _configuration.DeleteDock(gridName);
+            }
+
+            SaveConfiguration();
+        }
+
+        private void LoadHomeLocations()
+        {
+            homeLocations.Clear();
+            foreach (string gridName in _configuration.GridNames)
+            {
+                DockConfigurationBuilder dock = _configuration.Dock(gridName);
+
+                HomeLocation homeLocation = new HomeLocation(gridName)
+                {
+                    stationGridID = dock.GridID,
+                    stationConnectorName = dock.ConnectorName,
+                    stationConnectorID = dock.ConnectorID,
+                    stationConnectorPosition = dock.ConnectorPosition,
+                    stationConnectorForward = dock.ConnectorForward,
+                    stationConnectorUpGlobal = dock.ConnectorUpGlobal,
+                    stationConnectorUpLocal = dock.ConnectorUpLocal,
+                    stationConnectorLeft = dock.ConnectorLeft,
+                    stationConnectorSize = dock.ConnectorSize,
+                    shipConnectorName = dock.MyConnectorName,
+                    landingSequences = HomeLocation.LandingSequencesFromString(dock.LandingSequences)
+                };
+
+                foreach (string argument in dock.Arguments)
+                {
+                    homeLocation.arguments.Add(argument);
+                }
+
+                homeLocation.UpdateShipConnectorUsingName(this);
+                homeLocations.Add(homeLocation);
+            }
+        }
+
+        private bool ExecuteCommand(string command)
+        {
+            command = command.Trim();
+            if (command.Length == 0)
+            {
+                return true;
+            }
+
+            switch (command.ToLower())
+            {
+                case "about":
+                    _display.WriteLine(About);
+                    return true;
+
+                case "cls":
+                    _display.Clear();
+                    return true;
+
+                case "list":
+                    shipIOHandler.OutputHomeLocations();
+                    shipIOHandler.EchoFinish();
+                    return true;
+
+                case "write":
+                    SaveHomeLocations();
+                    return true;
+            }
+
+            return false;
+        }
 
         private HomeLocation FindHomeLocation(string argument)
         {

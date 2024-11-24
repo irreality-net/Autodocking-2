@@ -1,7 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using Sandbox.ModAPI.Ingame;
+﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using System;
+using System.Collections.Generic;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
 
@@ -11,7 +11,7 @@ namespace IngameScript
     {
         public class IOHandler
         {
-            private const string Version = "2.0 ASX2";
+            private readonly string _scriptID;
 
             private readonly Program parent_program;
             private string echoLine = "";
@@ -19,8 +19,9 @@ namespace IngameScript
             public List<IMyTimerBlock> output_timers = new List<IMyTimerBlock>();
             public List<IMyTimerBlock> output_start_timers = new List<IMyTimerBlock>();
 
-            public IOHandler(Program _parent_program)
+            public IOHandler(string scriptID, Program _parent_program)
             {
+                _scriptID = scriptID;
                 parent_program = _parent_program;
                 FindOutputBlocks();
             }
@@ -53,6 +54,8 @@ namespace IngameScript
                         if (block is IMyTimerBlock && block.CustomName.ToLower().Contains(parent_program.start_timer_tag) && blockIsOnMyGrid(block))
                             output_start_timers.Add((IMyTimerBlock)block);
                     }
+
+                    output_LCDs.AddRange(Display.Find(t_search_blocks, parent_program.lcd_tag, _scriptID));
                 }
                 //
                 else
@@ -68,8 +71,9 @@ namespace IngameScript
                         if (block is IMyTimerBlock && block.CustomName.ToLower().Contains(parent_program.start_timer_tag) && blockIsOnMyGrid(block))
                             output_start_timers.Add((IMyTimerBlock)block);
                     }
-                }
 
+                    output_LCDs.AddRange(Display.Find(parent_program.blocks, parent_program.lcd_tag, _scriptID));
+                }
             }
 
             public bool blockIsOnMyGrid(IMyTerminalBlock block)
@@ -166,7 +170,7 @@ namespace IngameScript
                 if (echoLine != "")
                 {
                     if (parent_program.runningIssues.Length > 0) parent_program.runningIssues += "\n";
-                    var echoString = $"= Spug's Auto Docking {Version} =\n\n{parent_program.runningIssues}{echoLine}";
+                    var echoString = $"{parent_program.runningIssues}{echoLine}";
                     parent_program.Echo(echoString);
                     //parent_program.Me.GetSurface(0).ContentType = ContentType.TEXT_AND_IMAGE;
                     //parent_program.Me.GetSurface(0).WriteText(echoString);

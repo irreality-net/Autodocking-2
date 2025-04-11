@@ -2,6 +2,7 @@
 using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
 
@@ -18,6 +19,7 @@ namespace IngameScript
             public List<IMyTextSurface> output_LCDs = new List<IMyTextSurface>();
             public List<IMyTimerBlock> output_timers = new List<IMyTimerBlock>();
             public List<IMyTimerBlock> output_start_timers = new List<IMyTimerBlock>();
+            public List<IMyTimerBlock> output_undocked_timers = new List<IMyTimerBlock>();
 
             public IOHandler(string scriptID, Program _parent_program)
             {
@@ -47,12 +49,17 @@ namespace IngameScript
                     output_LCDs = new List<IMyTextSurface>();
                     foreach (var block in t_search_blocks)
                     {
-                        if (block is IMyTimerBlock && block.CustomName.ToLower().Contains(parent_program.timer_tag))
+                        string blockName = block.CustomName.ToLower();
+                        if (block is IMyTimerBlock && blockName.Contains(parent_program.timer_tag))
                             output_timers.Add((IMyTimerBlock)block);
-                        if (block is IMyTextSurface && block.CustomName.ToLower().Contains(parent_program.lcd_tag))
+                        if (block is IMyTextSurface && blockName.Contains(parent_program.lcd_tag))
                             output_LCDs.Add((IMyTextSurface)block);
-                        if (block is IMyTimerBlock && block.CustomName.ToLower().Contains(parent_program.start_timer_tag) && blockIsOnMyGrid(block))
+                        if (block is IMyTimerBlock && blockName.Contains(parent_program.start_timer_tag) && blockIsOnMyGrid(block))
                             output_start_timers.Add((IMyTimerBlock)block);
+                        if (block is IMyTimerBlock && blockName.Contains(parent_program.undocked_timer_tag))
+                        {
+                            output_undocked_timers.Add((IMyTimerBlock)block);
+                        }
                     }
 
                     output_LCDs.AddRange(Display.Find(t_search_blocks, parent_program.lcd_tag, _scriptID));
@@ -64,12 +71,17 @@ namespace IngameScript
                     output_LCDs = new List<IMyTextSurface>();
                     foreach (var block in parent_program.blocks)
                     {
-                        if (block is IMyTimerBlock && block.CustomName.ToLower().Contains(parent_program.timer_tag) && blockIsOnMyGrid(block))
+                        string blockName = block.CustomName.ToLower();
+                        if (block is IMyTimerBlock && blockName.Contains(parent_program.timer_tag) && blockIsOnMyGrid(block))
                             output_timers.Add((IMyTimerBlock)block);
-                        if (block is IMyTextSurface && block.CustomName.ToLower().Contains(parent_program.lcd_tag) && blockIsOnMyGrid(block))
+                        if (block is IMyTextSurface && blockName.Contains(parent_program.lcd_tag) && blockIsOnMyGrid(block))
                             output_LCDs.Add((IMyTextSurface)block);
-                        if (block is IMyTimerBlock && block.CustomName.ToLower().Contains(parent_program.start_timer_tag) && blockIsOnMyGrid(block))
+                        if (block is IMyTimerBlock && blockName.Contains(parent_program.start_timer_tag) && blockIsOnMyGrid(block))
                             output_start_timers.Add((IMyTimerBlock)block);
+                        if (block is IMyTimerBlock && blockName.Contains(parent_program.undocked_timer_tag))
+                        {
+                            output_undocked_timers.Add((IMyTimerBlock)block);
+                        }
                     }
 
                     output_LCDs.AddRange(Display.Find(parent_program.blocks, parent_program.lcd_tag, _scriptID));
@@ -145,6 +157,13 @@ namespace IngameScript
                                 timer.Trigger();
             }
 
+            public void OutputUndockedTimer()
+            {
+                foreach (IMyTimerBlock timer in output_undocked_timers.Where(timer => timer?.IsWorking == true))
+                {
+                    timer.StartCountdown();
+                }
+            }
 
             public void WaypointEcho(string arg, int count, string extra_output)
             {

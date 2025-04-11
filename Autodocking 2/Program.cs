@@ -2,6 +2,7 @@
 using Sandbox.ModAPI.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
 
@@ -16,17 +17,11 @@ namespace IngameScript
                                                                      // Cinematic: Slower but looks cooler, especially for larger ships.
                                                                      // Classic: Lands at the classic pace.
                                                                      // Breakneck: Still safe, but will land pretty much as quick as it can.
-        
 
         double caution = 0.4;                                             // Between 0 - 0.9. Defines how close to max deceleration the ship will ride.
         bool extra_info = false;                                          // If true, this script will give you more information about what's happening than usual.
-        string your_title = "Captain";                                  // How the ship will refer to you.
-        bool small_ship_rotate_on_connector = true;       //If enabled, small ships will rotate on the connector to face the saved direction.
-        bool large_ship_rotate_on_connector = false;      //If enabled, large ships will rotate on the connector to face the saved direction.
-        bool rotate_on_approach = false;                          //If enabled,  the ship will rotate to the saved direction on connector approach.
         double topSpeed = 100;                                         // The top speed the ship will go in m/s.
 
-        bool extra_soft_landing_mode = false;                 // If your ship is hitting your connector too hard, enable this.
         double connector_clearance = 0;                          // If you raise this number (measured in meters), the ship will fly connector_clearance higher before coming down onto the connector.
         double add_acceleration = 0;                                // If your ship is accelerating very slow, or perhaps stopping at a low top speed, try raising this (e.g to 10).
 
@@ -34,6 +29,7 @@ namespace IngameScript
         string timer_tag = "[dock]";                                   // The text you can add to a timer block name. The timer will then be triggered on a completed dock.
         bool force_timer_search_on_station = false;       // If enabled, the ship will make sure it always searches the station for [dock] (the timer_tag) in the names of any timer blocks.
         string start_timer_tag = "[start dock]";                 // A timer with this text in the name will be triggered as soon as a docking procedure is started.
+        string undocked_timer_tag = "[undocked]";
 
         bool enable_antenna_function = true;                   //If enabled, the ship will try to search for an optional home script. Disable if the antenna functionality is giving you problems.
 
@@ -59,7 +55,7 @@ namespace IngameScript
         public const string About = Application + " " + Version + "\r\n(C) irreality.net 2024\r\n(C) Spug 2020";
         public const string ScriptID = "Autodocking";
         private const string Application = "Spug's Auto Docking\r\nby Abrasax Industries";
-        private const string Version = "1.2";
+        private const string Version = "1.3";
 
         private const double updatesPerSecond = 10; // Defines how many times the script performes it's calculations per second.
 
@@ -122,6 +118,8 @@ namespace IngameScript
         private Display _display;
         private ConfigurationBuilder _configuration;
 
+        private Vector3D? _startUndockingPosition;
+
         public Program()
         {
             _display = new Display(Me.CustomName, Me.GetSurface(0), Me.BlockDefinition.SubtypeId);
@@ -132,7 +130,7 @@ namespace IngameScript
                 _display.GetRecommendedSettings().CopyTo(_display);
             }
 
-            _configuration = new ConfigurationBuilder();
+            _configuration = new ConfigurationBuilder(ScriptID);
             LoadConfiguration();
 
             errorState = false;
@@ -160,6 +158,24 @@ namespace IngameScript
 
             SafelyExit();
         }
+
+        // How the ship will refer to you.
+        public string your_title { get; set; }
+
+        // If enabled, small ships will rotate on the connector to face the saved direction.
+        public bool small_ship_rotate_on_connector { get; set; }
+
+        // If enabled, large ships will rotate on the connector to face the saved direction.
+        private bool large_ship_rotate_on_connector { get; set; }
+
+        // If enabled, the ship will rotate to the saved direction on connector approach.
+        private bool rotate_on_approach { get; set; }
+
+        // If your ship is hitting your connector too hard, enable this.
+        private bool extra_soft_landing_mode { get; set; }
+
+        // Minimum distance (in meters) from initial position when undocking will be finished.
+        private int UndockingDistance { get; set;}
 
         //Help from Whip.
         private double AlignWithGravity(Waypoint waypoint, bool requireYawControl)
@@ -778,7 +794,6 @@ namespace IngameScript
                 if (!errorState)
                 {
                     // script was activated and there was no error so far.
-
                     if (!recording)
                     {
                         var my_connected_connector = systemsAnalyzer.FindMyConnectedConnector();
@@ -883,6 +898,11 @@ namespace IngameScript
                 shipIOHandler.EchoFinish();
             }
 
+            if (VerifyUndocking())
+            {
+                return;
+            }
+
             // Script docking is running:
             if (scriptEnabled && !errorState)
             {
@@ -924,10 +944,23 @@ namespace IngameScript
             MyIniParseResult customDataParseResult;
             if (_configuration.TryLoad(Me.CustomData, out customDataParseResult))
             {
+                your_title = _configuration.YourTitle;
+                small_ship_rotate_on_connector = _configuration.RotateSmallShipOnConnector;
+                large_ship_rotate_on_connector = _configuration.RotateLargeShipOnConnector;
+                rotate_on_approach = _configuration.RotateOnApproach;
+                extra_soft_landing_mode = _configuration.ExtraSoftLandingMode;
+                UndockingDistance = _configuration.UndockingDistance;
                 SaveConfiguration();
             }
             else
             {
+                your_title = ConfigurationBuilder.DefaultYourTitle;
+                small_ship_rotate_on_connector = ConfigurationBuilder.DefaultRotateSmallShipOnConnector;
+                large_ship_rotate_on_connector = ConfigurationBuilder.DefaultRotateLargeShipOnConnector;
+                rotate_on_approach = ConfigurationBuilder.DefaultRotateOnApproach;
+                extra_soft_landing_mode = ConfigurationBuilder.DefaultExtraSoftLandingMode;
+                UndockingDistance = ConfigurationBuilder.DefaultUndockingDistance;
+
                 _display.WriteLine("Error while loading configuration.");
                 _display.WriteLine(customDataParseResult.ToString());
             }
@@ -1024,6 +1057,10 @@ namespace IngameScript
 
                 case "write":
                     SaveHomeLocations();
+                    return true;
+
+                case "undock":
+                    StartUndocking();
                     return true;
             }
 
@@ -1592,20 +1629,21 @@ namespace IngameScript
 
         private void ConnectAndDock()
         {
+            SafelyExit();
             systemsAnalyzer.currentHomeLocation.shipConnector.Connect();
             shipIOHandler.Clear();
             shipIOHandler.Echo("DOCKED\nThe ship has docked " + your_title +
-                               "!\nI will patiently await for more orders in the future.");
+                               "!\nI will patiently await.");
             shipIOHandler.EchoFinish();
             shipIOHandler.OutputTimer();
-            SafelyExit();
         }
 
         private void SafelyExit()
-        {
+        { 
             Runtime.UpdateFrequency |= UpdateFrequency.Update1;
             scriptEnabled = false;
             runningIssues = "";
+            _startUndockingPosition = null;
             if (systemsAnalyzer != null)
             {
                 foreach (var thisGyro in systemsAnalyzer.gyros)
@@ -1620,6 +1658,79 @@ namespace IngameScript
             }
         }
 
+        private void StartUndocking()
+        {
+            if (_startUndockingPosition == null)
+            {
+                shipIOHandler.Clear();
+                List<IMyThrust> allThrusters = blocks
+                    .OfType<IMyThrust>()
+                    .Where(block => block.CubeGrid.IsSameConstructAs(Me.CubeGrid))
+                    .ToList();
 
+                foreach (IMyThrust thruster in allThrusters)
+                {
+                    thruster.ThrustOverridePercentage = 0;
+                    thruster.Enabled = true;
+                }
+
+                List<IMyGyro> allGyroscopes = blocks
+                    .OfType<IMyGyro>()
+                    .Where(block => block.CubeGrid.IsSameConstructAs(Me.CubeGrid))
+                    .ToList();
+
+                foreach (IMyGyro gyroscope in allGyroscopes)
+                {
+                    gyroscope.GyroOverride = false;
+                }
+
+                systemsAnalyzer.GatherBasicData();
+
+                shipIOHandler.Echo($"UNDOCKING");
+                foreach (IMyThrust thruster in systemsAnalyzer.UpThrust.thrusters)
+                {
+                    thruster.ThrustOverridePercentage = 1;
+                }
+
+                _startUndockingPosition = Me.GetPosition();
+                Runtime.UpdateFrequency = UpdateFrequency.Update1;
+
+                systemsAnalyzer.FindMyConnectedConnector()?.Disconnect();
+                shipIOHandler.EchoFinish();
+            }
+            else
+            {
+                SafelyExit();
+            }
+        }
+
+        private bool VerifyUndocking()
+        {
+            if (_startUndockingPosition.HasValue)
+            {
+                double distance = Vector3D.Distance(Me.GetPosition(), _startUndockingPosition.Value);
+                shipIOHandler.Clear();
+                shipIOHandler.Echo($"UNDOCKING\n{distance:F1} m");
+                if (distance >= UndockingDistance)
+                {
+                    FinishUndocking();
+                }
+
+                shipIOHandler.EchoFinish();
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        private void FinishUndocking()
+        {
+            shipIOHandler.Clear();
+            shipIOHandler.Echo("UNDOCKED");
+            SafelyExit();
+            shipIOHandler.OutputUndockedTimer();
+        }
     }
 }

@@ -27,12 +27,7 @@
   <ItemGroup>
     <None Remove="Instructions.readme" />
     <AdditionalFiles Include="Instructions.readme" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="thumb.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <AdditionalFiles Include="thumb.png" />
   </ItemGroup>
 
 </Project>

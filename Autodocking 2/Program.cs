@@ -52,10 +52,10 @@ namespace IngameScript
         private readonly ShipSystemsAnalyzer systemsAnalyzer;
         #endregion
 
-        public const string About = Application + " " + Version + "\r\n(C) irreality.net 2024\r\n(C) Spug 2020";
+        public const string About = Application + " " + Version + "\r\n(C) irreality.net 2024-2025\r\n(C) Spug 2020";
         public const string ScriptID = "Autodocking";
         private const string Application = "Spug's Auto Docking\r\nby Abrasax Industries";
-        private const string Version = "1.3";
+        private const string Version = "1.4";
 
         private const double updatesPerSecond = 10; // Defines how many times the script performes it's calculations per second.
 
@@ -776,6 +776,11 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
+            if (argument.StartsWith("GracefulShutDown::"))
+            {
+                return;
+            }
+
             if ((updateSource & (UpdateType.Update1 | UpdateType.Once | UpdateType.IGC)) == 0)
             {
                 // Script is activated by pressing "Run"
